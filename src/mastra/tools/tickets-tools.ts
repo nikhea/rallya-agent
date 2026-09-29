@@ -1,7 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getRallyaClient } from "../utils/rallya-client.js";
-import { ticketSchema } from "../utils/rallya-schemas.js";
+import { pageSchema, ticketSchema } from "../utils/rallya-schemas.js";
 
 const orgRef = "Org UUID or slug (slugs are the short human-readable identifier, e.g. 'acme')";
 const eventRef = "Event UUID or slug";
@@ -14,10 +14,14 @@ export const listPublicTicketsTool = createTool({
   inputSchema: z.object({
     event: z.string().describe(eventRef),
   }),
-  outputSchema: z.array(ticketSchema),
+  outputSchema: pageSchema(ticketSchema),
   execute: async ({ event }) => {
     const client = getRallyaClient();
-    return await client.tickets.listPublic(event);
+    // NOTE: the SDK types this as TicketType[], but the wire returns a { items, total } page.
+    return (await client.tickets.listPublic(event)) as unknown as {
+      items: z.infer<typeof ticketSchema>[];
+      total: number;
+    };
   },
 });
 
@@ -30,10 +34,14 @@ export const listTicketsTool = createTool({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
   }),
-  outputSchema: z.array(ticketSchema),
+  outputSchema: pageSchema(ticketSchema),
   execute: async ({ org, event }) => {
     const client = getRallyaClient();
-    return await client.tickets.list(org, event);
+    // NOTE: the SDK types this as TicketType[], but the wire returns a { items, total } page.
+    return (await client.tickets.list(org, event)) as unknown as {
+      items: z.infer<typeof ticketSchema>[];
+      total: number;
+    };
   },
 });
 

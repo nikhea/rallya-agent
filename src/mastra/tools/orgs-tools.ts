@@ -175,16 +175,18 @@ export const inviteOrgMemberTool = createTool({
   id: "rallya-invite-org-member",
   description:
     "Invite someone to an organization by email. Use this (rather than direct add) when the person may not have a Rallya account yet — they receive an invite token to accept or decline. " +
-    "Accepts an optional role for the invite. Returns the invite record including its id and expiry.",
+    "Accepts an optional role for the invite. Returns a confirmation message " +
+    "({ message: 'Invite sent' }) — the invite id is NOT returned here; use list-org-invites to find it for revocation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     email: z.string().email().describe("Email address to invite"),
     role: z.string().optional().describe("Role the invite grants, e.g. MEMBER or ADMIN"),
   }),
-  outputSchema: orgInviteSchema,
+  outputSchema: messageSchema,
   execute: async ({ org, email, role }) => {
     const client = getRallyaClient();
-    return await client.orgs.invite(org, { email, role });
+    // NOTE: the SDK types this as OrgInvite, but the wire returns { message: "Invite sent" }.
+    return (await client.orgs.invite(org, { email, role })) as unknown as { message: string };
   },
 });
 

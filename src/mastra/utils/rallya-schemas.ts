@@ -49,13 +49,16 @@ export const customRoleSchema = z.object({
   createdAt: z.string(),
 });
 
-/** Normalized pagination envelope: { items, total, page, perPage }. */
+/** Normalized pagination envelope: { items, total, page?, perPage? }.
+ * The server omits page/perPage on most routes (the SDK does not backfill
+ * them despite its docs), so they are optional — Mastra output validation
+ * rejects responses with missing required fields. */
 export const pageSchema = <T extends z.ZodTypeAny>(item: T) =>
   z.object({
     items: z.array(item),
     total: z.number(),
-    page: z.number(),
-    perPage: z.number(),
+    page: z.number().optional(),
+    perPage: z.number().optional(),
   });
 
 export const eventSchema = z.object({
