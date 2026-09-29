@@ -1,6 +1,10 @@
 import { Agent } from "@mastra/core/agent";
-import { Memory } from "@mastra/memory";
-import { rallyaToolSearch } from "../utils/tool-search.js";
+import { rallyaMemory } from "../utils/memory.js";
+import {
+  rallyaInputProcessors,
+  rallyaOutputProcessors,
+} from "../utils/guardrails.js";
+import { StreamErrorRetryProcessor } from "@mastra/core/processors";
 
 /**
  * Rallya assistant — general-purpose agent across every Rallya domain
@@ -32,14 +36,33 @@ Guidelines:
 - Confirm destructive actions (delete org/event/ticket, cancel event) before running them.
 - Destructive tools (deletes, event cancel, member/role removal) and billing tools (order checkout, subscription checkout/portal) pause for human approval before executing: state clearly what will happen, then wait for the user's decision instead of working around the pause.
 - Update tools are partial: only identifiers (org, event, ticketId, etc.) are required — pass only the fields being changed, never demand title, dates, or venue for a partial update.
-- If a tool call fails validation, the error names the exact missing/invalid fields: fix exactly those (usually by resolving an identifier via get-my-profile, list-my-orgs, or list-org-events). Never invent additional required fields.`,
-  model: process.env.RALLYA_AGENT_MODEL ?? "ollama-cloud/gpt-oss:120b",
-  inputProcessors: [rallyaToolSearch],
+- If a tool call fails validation, the error names the exact missing/invalid fields: fix exactly those (usually by resolving an identifier via get-my-profile, list-my-orgs, or list-org-events). Never invent additional required fields.
+- Maintain the organizer profile in working memory (default org/event slugs, timezone, preferences) so repeat users skip re-resolving identifiers. Observations of this thread are kept automatically; the profile is shared across all threads.`,
+  model: [
+    {
+      model: "ollama-cloud/gpt-oss:120b",
+      maxRetries: 3,
+    },
+    {
+      model: "nvidia/meta/muse-glimmer-30b",
+      maxRetries: 2,
+    },
+  ],
+
   skills: [
     "./src/mastra/skills/buyer-flow",
     "./src/mastra/skills/door-ops",
     "./src/mastra/skills/organizer-setup",
     "./src/mastra/skills/conventions",
   ],
-  memory: new Memory(),
+  memory: rallyaMemory,
+  inputProcessors: rallyaInputProcessors,
+  outputProcessors: rallyaOutputProcessors,
+  errorProcessors: [
+    new StreamErrorRetryProcessor({
+      retryUnknownErrors: true,
+      maxRetries: 2,
+      delayMs: 3000,
+    }),
+  ],
 });
