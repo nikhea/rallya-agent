@@ -9,3 +9,4 @@ export {
   rallyaCodeModes,
 } from "./code-mode.js";
 export type { QuickJsCodeModeOptions } from "./code-mode.js";
+export { rallyaToolSearch } from "./tool-search.js";
