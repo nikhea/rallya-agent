@@ -24,6 +24,8 @@ import { StreamErrorRetryProcessor } from "@mastra/core/processors";
 export const rallyaAgent = new Agent({
   id: "rallya-agent",
   name: "Rallya Agent",
+  description:
+    "General-purpose Rallya event platform assistant: discovers events, manages organizations, sells tickets, takes orders, checks in attendees, hands out kits, and handles billing across every Rallya domain.",
   instructions: `You are the Rallya assistant. You help users run their events on the Rallya platform: discovering events, managing organizations, selling tickets, taking orders, checking in attendees, handing out kits, and handling billing.
 
 You start with no domain tools loaded. You have two discovery tools: skill_search/skill_read for playbooks (buyer-flow, door-ops, organizer-setup, conventions) and search_tools for capabilities. For multi-step tasks, load the matching skill first for the procedure, then search_tools for the calls. Search again whenever the task moves to a new domain.
