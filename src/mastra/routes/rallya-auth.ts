@@ -7,16 +7,18 @@ import { RALLYA_AUTH_KEY, RALLYA_IDENTITY_KEY, rallyaAuthMiddleware } from "../u
 /**
  * Public Rallya auth routes served by the Mastra server.
  *
- * Single-token model: clients sign in here, then send the Rallya access
- * token as `Authorization: Bearer <token>` on every call — the same token
- * the main server issued. The middleware confirms it and tools act as that
- * user; `X-Rallya-Api-Key` still works for tablets/cron. Without any
- * credential, tools fall back to server env (single-user).
+ * Two layers (see `rallyaAuthMiddleware`):
+ * - Operator gate: `Authorization: Bearer <mastra-jwt>` (`MastraJwtAuth`).
+ *   Public routes below opt out via `requiresAuth: false`.
+ * - Rallya identity: `X-Rallya-Access-Token` (+ `X-Rallya-Refresh-Token`)
+ *   or `X-Rallya-Api-Key`. The middleware confirms it and tools act as that
+ *   user. Without any Rallya credential, tools fall back to server env.
  *
  * - POST /rallya-auth/register { email, password, firstName?, lastName? }
  * - POST /rallya-auth/login { email, password } → { accessToken, refreshToken }
  * - POST /rallya-auth/refresh { refreshToken } → { accessToken, refreshToken }
- * - GET  /rallya-auth/me (Bearer token or rallya headers) → profile + memberships
+ * - GET  /rallya-auth/me (Rallya headers) → profile + memberships
+ * - GET  /rallya-auth/whoami (Rallya headers) → resolved request identity
  */
 
 const baseUrl = process.env.RALLYA_BASE_URL ?? "http://localhost:8080/api/v1";
@@ -46,13 +48,8 @@ const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
-/** Bearer Rallya token from `Authorization`, else the legacy X- header. */
-function bearerOrHeaderToken(c: any): string | undefined {
-  const header = c.req.header("authorization") ?? "";
-  if (header.toLowerCase().startsWith("bearer ")) {
-    const token = header.slice("Bearer ".length).trim();
-    if (token) return token;
-  }
+/** Rallya token from the dedicated header (`Authorization` is Mastra's). */
+function rallyaHeaderToken(c: any): string | undefined {
   return c.req.header("x-rallya-access-token") ?? undefined;
 }
 
@@ -110,10 +107,11 @@ export const rallyaAuthRoutes = [
   }),
   registerApiRoute("/rallya-auth/me", {
     method: "GET",
+    requiresAuth: false, // public: validates Rallya credentials, needs no operator token
     openapi: { summary: "Validate Rallya credentials, return profile", tags: ["Rallya Auth"] },
     handler: async (c) => {
       const apiKey = c.req.header("x-rallya-api-key");
-      const accessToken = bearerOrHeaderToken(c);
+      const accessToken = rallyaHeaderToken(c);
       const refreshToken = c.req.header("x-rallya-refresh-token") ?? "";
       try {
         const client = apiKey
@@ -131,6 +129,7 @@ export const rallyaAuthRoutes = [
   }),
   registerApiRoute("/rallya-auth/whoami", {
     method: "GET",
+    requiresAuth: false, // public: echoes resolved Rallya identity, needs no operator token
     // Needs the middleware explicitly: server middleware only covers /api/*,
     // while custom routes live at the server root.
     middleware: [rallyaAuthMiddleware],

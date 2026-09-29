@@ -3,22 +3,23 @@ import { createHash } from "node:crypto";
 import { RallyaClient } from "@rallya/sdk";
 
 /**
- * Single-token auth: the caller's Rallya credential IS the identity.
+ * Two-layer auth: Mastra operator JWT + per-request Rallya identity.
  *
- * Flow: main-server signin → Rallya access token → sent as
- * `Authorization: Bearer <rallya-jwt>` (Studio: Headers editor) → this
- * middleware confirms it against the Rallya API once per token (5-minute
- * TTL cache), then puts `{ accessToken }` as `rallyaAuth` plus a verified
- * `rallya-user:<id>` memory resource into the request context. Tools act as
- * that user; threads namespace per user. No second credential exists.
+ * - `Authorization: Bearer <mastra-jwt>` belongs to `MastraJwtAuth`
+ *   (edge gate, `MASTRA_JWT_SECRET`). This middleware never reads it.
+ * - Rallya identity travels via dedicated headers (Studio: Headers editor):
+ *   `X-Rallya-Access-Token: <rallya-jwt>` (+ optional
+ *   `X-Rallya-Refresh-Token`), or `X-Rallya-Api-Key: rk_live_...` for
+ *   tablets/cron. Both are confirmed against the Rallya API once per
+ *   credential (5-minute TTL cache), then stored as `rallyaAuth` plus a
+ *   verified `rallya-user:<id>` memory resource. Tools act as that user;
+ *   threads namespace per user.
  *
- * - Missing credentials fall through untouched (server env identity =
- *   single-user mode). Present-but-invalid credentials get 401 — never
- *   silently downgraded to the server identity.
- * - `X-Rallya-Api-Key: rk_live_...` keeps working for tablets/cron (keys
- *   are self-validating on use; resource falls back to a credential hash).
+ * - Missing credentials fall through untouched (public routes and Studio's
+ *   request-context JSON editor path). Present-but-invalid credentials get
+ *   401 — never silently downgraded to the server identity.
  * - Studio's request-context JSON editor (`{"rallyaAuth": {...}}`) still
- *   works and takes precedence when headers are absent.
+ *   works when headers are absent.
  */
 
 export const RALLYA_AUTH_KEY = "rallyaAuth";
@@ -121,29 +122,46 @@ export async function verifyRallyaToken(accessToken: string): Promise<{ userId: 
   }
 }
 
-function bearerToken(c: any): string | null {
-  const header = c.req.header("authorization") ?? "";
-  if (!header.toLowerCase().startsWith("bearer ")) return null;
-  const token = header.slice("Bearer ".length).trim();
-  return token || null;
+/**
+ * Confirm a Rallya API key against the API (`auth/me`), cached per key for
+ * VERIFY_TTL_MS. Returns the verified user id, or null.
+ */
+export async function verifyRallyaApiKey(apiKey: string): Promise<{ userId: string; email?: string } | null> {
+  const key = cacheKey(`api-key:${apiKey}`);
+  const hit = verifiedCache.get(key);
+  if (hit && Date.now() - hit.cachedAt < VERIFY_TTL_MS) {
+    return { userId: hit.userId, email: hit.email };
+  }
+  verifiedCache.delete(key);
+  try {
+    const baseUrl = process.env.RALLYA_BASE_URL ?? "http://localhost:8080/api/v1";
+    const client = new RallyaClient({ baseUrl, apiKey });
+    const me = await client.auth.me();
+    if (!me?.id) return null;
+    verifiedCache.set(key, { userId: me.id, email: me.email, cachedAt: Date.now() });
+    return { userId: me.id, email: me.email };
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Hono middleware: single-token gate + identity for `/api/*`.
+ * Hono middleware: Rallya identity for `/api/*`.
  *
- * - `Authorization: Bearer <rallya-jwt>` → verified (cached); sets
- *   `rallyaAuth` + verified `rallya-user:<id>` resource. Invalid/expired
- *   → 401, never downgraded to the server identity.
- * - `X-Rallya-Api-Key` → passed through unverified (self-validating),
- *   resource falls back to a credential hash.
- * - Neither present → fall through (server env identity, single-user mode).
- *   Studio's request-context editor path is unaffected.
+ * Reads ONLY the dedicated `X-Rallya-*` headers — `Authorization` belongs
+ * to `MastraJwtAuth` and is never inspected here.
+ *
+ * - `X-Rallya-Access-Token` → verified (cached); sets `rallyaAuth` +
+ *   verified `rallya-user:<id>` resource. Invalid/expired → 401, never
+ *   downgraded to the server identity.
+ * - `X-Rallya-Api-Key` → verified (cached); sets `rallyaAuth` + verified
+ *   `rallya-user:<id>` resource. Invalid → 401.
+ * - Neither present → fall through (public routes / Studio JSON-editor path).
  */
 export async function rallyaAuthMiddleware(c: any, next: () => Promise<void>): Promise<void> {
   const apiKey = c.req.header(RALLYA_API_KEY_HEADER);
-  const bearer = bearerToken(c);
-  const headerToken = c.req.header(RALLYA_ACCESS_TOKEN_HEADER);
-  const accessToken = bearer ?? headerToken ?? undefined;
+  // NOTE: `Authorization` is owned by MastraJwtAuth — do not read it here.
+  const accessToken = c.req.header(RALLYA_ACCESS_TOKEN_HEADER) ?? undefined;
   if (!apiKey && !accessToken) {
     await next();
     return;
@@ -170,13 +188,21 @@ export async function rallyaAuthMiddleware(c: any, next: () => Promise<void>): P
     await next();
     return;
   }
-  // API-key path: self-validating on use, hash-namespaced resource.
+  // API-key path: verified upfront (cached), same identity shape as JWT.
+  const keyIdentity = await verifyRallyaApiKey(apiKey);
+  if (!keyIdentity) {
+    return c.json(
+      { error: "unauthorized", message: "Invalid Rallya API key." },
+      401,
+    );
+  }
   const auth: RallyaRequestAuth = { apiKey };
   requestContext?.set?.(RALLYA_AUTH_KEY, auth);
-  const resourceId = deriveResourceId(auth);
-  if (resourceId) requestContext?.set?.(MASTRA_RESOURCE_ID_KEY, resourceId);
-  // Flat observability keys for the API-key path (no verified email).
-  if (resourceId) requestContext?.set?.(OBS_USER_ID_KEY, resourceId);
+  requestContext?.set?.(RALLYA_IDENTITY_KEY, { userId: keyIdentity.userId, email: keyIdentity.email });
+  requestContext?.set?.(MASTRA_RESOURCE_ID_KEY, `rallya-user:${keyIdentity.userId}`);
+  // Flat observability keys for the API-key path.
+  requestContext?.set?.(OBS_USER_ID_KEY, keyIdentity.userId);
+  if (keyIdentity.email) requestContext?.set?.(OBS_USER_EMAIL_KEY, keyIdentity.email);
   requestContext?.set?.(OBS_AUTH_METHOD_KEY, "api-key");
   await next();
 }
