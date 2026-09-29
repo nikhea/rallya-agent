@@ -43,7 +43,7 @@ export const listPlatformAuditTool = createTool({
     "List audit events platform-wide across all organizations. Superadmin only — regular org API keys and members cannot use this. " +
     "Accepts the same filters as the org audit log plus an org filter. Returns a paginated envelope of audit events.",
   inputSchema: z.object({
-    org: z.string().optional().describe("Narrow to one org (UUID or slug)"),
+    org: z.string().optional().describe("Narrow to one org"),
     ...auditQuery,
   }),
   outputSchema: pageSchema(auditEventSchema),

@@ -8,9 +8,10 @@ export const createOrderTool = createTool({
   description:
     "Create an order for a ticket type — the first step of buying tickets. Free orders (priceCents 0) confirm immediately; priced orders enter PENDING_PAYMENT and need the Stripe checkout tool to complete payment. " +
     "An idempotency key is auto-generated when omitted; pass your own when retrying to avoid duplicate orders. " +
-    "Returns the order with its id, status, price, and expiry. Check the ticket's remaining and maxPerOrder first to avoid rejections.",
+    "Returns the order with its id, status, price, and expiry. Check the ticket's remaining and maxPerOrder first to avoid rejections. " +
+    "The event must be given as UUID — slugs are rejected on this route.",
   inputSchema: z.object({
-    event: z.string().describe("Event UUID or slug"),
+    event: z.string().describe("Event UUID (NOT a slug — this route rejects slugs)"),
     ticketTypeId: z.string().describe("Ticket type UUID (see ticket lists)"),
     quantity: z.number().int().min(1).describe("Number of tickets to buy"),
     idempotencyKey: z.string().optional().describe("Client-generated key making retries safe; auto-generated if omitted"),
@@ -56,7 +57,7 @@ export const getOrderTool = createTool({
 export const cancelOrderTool = createTool({
   id: "rallya-cancel-order",
   description:
-    "Cancel a pending order, releasing its held tickets. Use when a buyer abandons checkout or an organizer voids an unpaid order — only pending orders can be cancelled. " +
+    "Cancel an order, releasing its held tickets. Use when a buyer abandons checkout or an organizer voids an order — works on every live status (PENDING, PENDING_PAYMENT, CONFIRMED); only terminal states (CANCELLED, EXPIRED) reject. " +
     "Returns the order with status CANCELLED.",
   inputSchema: z.object({
     orderId: z.string().describe("Order UUID"),

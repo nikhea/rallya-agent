@@ -28,7 +28,7 @@ export const createOrgTool = createTool({
   description:
     "Create a new Rallya organization (workspace). Use when a user wants to set up a new team or company on Rallya — the caller becomes the OWNER of the new org. " +
     "Accepts an optional URL-friendly slug (auto-derived from the name when omitted) and an optional logo URL. " +
-    "Returns the created org including its id, slug, the caller's role, and creation timestamp. Requires user authentication.",
+    "Returns the created org including its id, slug, the caller's role, and creation timestamp. Requires authentication.",
   inputSchema: z.object({
     name: z.string().describe("Organization display name, e.g. 'Acme Inc'"),
     slug: z.string().optional().describe("URL-friendly unique slug, e.g. 'acme'. Auto-derived from the name if omitted."),
@@ -73,6 +73,7 @@ export const updateOrgTool = createTool({
   id: "rallya-update-org",
   description:
     "Update an organization's display name, slug, or logo. Use for renames or rebranding; only include the fields that should change. " +
+    "Only the org identifier is required — never ask for other fields for a partial change. " +
     "Changing the slug changes the identifier used in URLs, so prefer confirming with the user first. Returns the updated org.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
@@ -91,11 +92,12 @@ export const removeOrgTool = createTool({
   id: "rallya-remove-org",
   description:
     "Permanently delete an organization and everything under it. Destructive and irreversible — only use after explicit user confirmation. " +
-    "Requires the OWNER role. Returns a deletion confirmation.",
+    "Requires the OWNER role. Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
   }),
   outputSchema: z.object({ deleted: z.boolean(), org: z.string() }),
+  requireApproval: true,
   execute: async ({ org }) => {
     const client = getRallyaClient();
     await client.orgs.remove(org);
@@ -141,7 +143,7 @@ export const updateOrgMemberRoleTool = createTool({
   id: "rallya-update-org-member-role",
   description:
     "Change a member's built-in role (OWNER, ADMIN, MEMBER) within an organization. Use for promotions or demotions; for fine-grained custom roles use the role-assign tool instead. " +
-    "You need the member's user UUID — list members first if you only have their email. Returns the updated membership.",
+    "You need the member's user UUID — list members first if you only have their email. The last OWNER can never be demoted (fail-closed). Returns the updated membership.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     userId: z.string().describe("Member's user UUID (see list-org-members)"),
@@ -158,12 +160,13 @@ export const removeOrgMemberTool = createTool({
   id: "rallya-remove-org-member",
   description:
     "Remove a member from an organization, revoking their access immediately. Use when someone leaves the team or was added by mistake. " +
-    "Takes the member's user UUID (list members first if needed). Returns a removal confirmation.",
+    "Takes the member's user UUID (list members first if needed). The last OWNER can never be removed. Requires human approval before execution. Returns a removal confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     userId: z.string().describe("Member's user UUID (see list-org-members)"),
   }),
   outputSchema: z.object({ removed: z.boolean(), org: z.string(), userId: z.string() }),
+  requireApproval: true,
   execute: async ({ org, userId }) => {
     const client = getRallyaClient();
     await client.orgs.removeMember(org, userId);
@@ -227,7 +230,7 @@ export const acceptOrgInviteTool = createTool({
   id: "rallya-accept-org-invite",
   description:
     "Accept an organization invite using its token, joining the org. Use when the current user received an invite (e.g. via email) and wants to join. " +
-    "The token is the secret from the invitation, not the invite id. Returns a confirmation message.",
+    "The token is the secret from the invitation, not the invite id, and the invite email must match the current user's account email. Returns a confirmation message.",
   inputSchema: z.object({
     token: z.string().describe("Invite token from the invitation"),
   }),
@@ -309,13 +312,14 @@ export const updateOrgRoleTool = createTool({
 export const deleteOrgRoleTool = createTool({
   id: "rallya-delete-org-role",
   description:
-    "Delete a custom org role. Only use when no one should hold it anymore — check holder counts via the role list first. " +
-    "Returns a deletion confirmation.",
+    "Delete a custom org role. Only use when no one should hold it anymore — check holder counts via the role list first; deletion fails with 409 while the role is still assigned. " +
+    "Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     role: z.string().describe("Role name or id"),
   }),
   outputSchema: z.object({ deleted: z.boolean(), role: z.string() }),
+  requireApproval: true,
   execute: async ({ org, role }) => {
     const client = getRallyaClient();
     await client.orgs.deleteRole(org, role);

@@ -11,7 +11,8 @@ export const createKitTool = createTool({
   id: "rallya-create-kit",
   description:
     "Define a named kit type for an event — e.g. 'VIP pack', 'T-shirt (M)', or 'Welcome bag' — with a total quantity of at least 1. " +
-    "Kits model merch or welcome packs handed to checked-in attendees. Use this setup step before any handouts can be collected. Returns the created kit type.",
+    "Kits model merch or welcome packs handed to checked-in attendees. Use this setup step before any handouts can be collected. " +
+    "Kit quotas are plan-gated: over-quota creation fails with 402 UPGRADE_REQUIRED. Returns the created kit type.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
@@ -46,6 +47,7 @@ export const updateKitTool = createTool({
   id: "rallya-update-kit",
   description:
     "Patch a kit type — rename it, change its description, or adjust the total quantity (e.g. topping up stock). Only include fields that should change. " +
+    "Only org, event, and kitId are required — never ask for other fields for a partial change. " +
     "Takes the kit UUID from the kit list. Returns the updated kit type.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
@@ -65,14 +67,15 @@ export const updateKitTool = createTool({
 export const removeKitTool = createTool({
   id: "rallya-remove-kit",
   description:
-    "Permanently delete a kit type. Only use when the kit is no longer needed and has no outstanding handouts — deletion is irreversible. " +
-    "Returns a deletion confirmation.",
+    "Permanently delete a kit type. Deletion is irreversible — void any outstanding handouts first, and only delete kits that are no longer needed. " +
+    "Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
     kitId: z.string().describe("Kit UUID (see list-kits)"),
   }),
   outputSchema: z.object({ deleted: z.boolean(), kitId: z.string() }),
+  requireApproval: true,
   execute: async ({ org, event, kitId }) => {
     const client = getRallyaClient();
     await client.kits.remove(org, event, kitId);

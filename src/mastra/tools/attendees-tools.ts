@@ -10,7 +10,7 @@ export const listMyAttendeesTool = createTool({
   id: "rallya-list-my-attendees",
   description:
     "List the attendee passes (tickets) owned by the current user across events, with status (REGISTERED, CHECKED_IN, CANCELLED) and check-in state. " +
-    "Use when a user asks 'what tickets do I have' or you need an attendee id for cancellation or QR lookup. Returns a paginated envelope.",
+    "Use when a user asks 'what tickets do I have' or you need an attendee id for cancellation or detail lookup. Returns a paginated envelope.",
   inputSchema: z.object({
     page: z.number().int().min(1).optional().describe("Page number, defaults to 1"),
     perPage: z.number().int().min(1).max(100).optional().describe("Items per page, default 20, max 100"),
@@ -25,8 +25,8 @@ export const listMyAttendeesTool = createTool({
 export const getMyAttendeeTool = createTool({
   id: "rallya-get-my-attendee",
   description:
-    "Fetch one attendee pass of the current user by id, including its QR payload for door check-in. " +
-    "Use when the user needs their entry code or you need the pass's event, order, and status details before check-in or cancellation.",
+    "Fetch one attendee pass of the current user by id, with its event, order, and status details — use before check-in or cancellation. " +
+    "Note: passes do NOT include the QR payload (the server stores hashes only); entry codes arrive by confirmation email, so never promise to display a QR code.",
   inputSchema: z.object({
     attendeeId: z.string().describe("Attendee UUID (see list-my-attendees)"),
   }),
@@ -92,7 +92,7 @@ export const correctAttendeeTool = createTool({
   id: "rallya-correct-attendee",
   description:
     "Correct an attendee's name or email on the roster (organizer action). Use for typos or ownership transfers — e.g. fixing a misspelled name before check-in. " +
-    "Only include the fields that should change; takes the attendee UUID from the roster. Returns the updated attendee.",
+    "Only include the fields that should change; only org, event, and attendeeId are required. Takes the attendee UUID from the roster. Returns the updated attendee.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),

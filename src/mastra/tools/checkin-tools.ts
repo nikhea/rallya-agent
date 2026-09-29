@@ -9,7 +9,8 @@ const eventRef = "Event UUID or slug";
 export const scanCheckinTool = createTool({
   id: "rallya-scan-checkin",
   description:
-    "Perform a door check-in scan for one attendee — the core door-tablet operation. Provide EXACTLY ONE of: code (the QR payload from the attendee pass) or attendeeId (manual lookup fallback). " +
+    "Perform a door check-in scan for one attendee — the core door-tablet operation. Pass a code (QR payload) OR an attendeeId (manual lookup); at least one is required. " +
+    "No tool returns QR payloads (the server stores hashes only), so prefer attendeeId from the event roster unless the user pastes actual QR codes. " +
     "Refusals are NOT errors: they come back as HTTP 200 with an outcome of ALREADY_CHECKED_IN, INVALID_CODE, CANCELLED, or WRONG_EVENT — only CHECKED_IN means entry granted. " +
     "Works with server-to-server API keys, making it ideal for door tablets. Returns the scan result with outcome, method (qr/manual), attendee id, and timestamp.",
   inputSchema: z.object({
@@ -32,6 +33,7 @@ export const scanBatchCheckinTool = createTool({
   id: "rallya-scan-batch-checkin",
   description:
     "Check in many attendees at once by submitting up to 50 QR codes in a single call. Use for bulk entry lanes, re-scanning a queue, or catching up after offline scanning. " +
+    "Only use this with real QR codes the user provides — no tool returns QR payloads, so without pasted codes, check attendees in one by one via scan-checkin with roster attendeeIds instead. " +
     "Each code gets its own result entry with the same outcome semantics as single scans (CHECKED_IN vs ALREADY_CHECKED_IN/INVALID_CODE/etc). " +
     "Returns { results } — one ScanResult per submitted code, in order.",
   inputSchema: z.object({

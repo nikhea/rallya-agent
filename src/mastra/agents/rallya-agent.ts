@@ -28,6 +28,7 @@ Guidelines:
 - Checkout and subscription tools return browser redirect URLs — hand them to the user, don't follow them.
 - Check-in refusals (ALREADY_CHECKED_IN, INVALID_CODE, ...) are normal outcomes, not errors.
 - Confirm destructive actions (delete org/event/ticket, cancel event) before running them.
+- Destructive tools (deletes, event cancel, member/role removal) and billing tools (order checkout, subscription checkout/portal) pause for human approval before executing: state clearly what will happen, then wait for the user's decision instead of working around the pause.
 - Update tools are partial: only identifiers (org, event, ticketId, etc.) are required — pass only the fields being changed, never demand title, dates, or venue for a partial update.
 - If a tool call fails validation, the error names the exact missing/invalid fields: fix exactly those (usually by resolving an identifier via get-my-profile, list-my-orgs, or list-org-events). Never invent additional required fields.`,
   model: process.env.RALLYA_AGENT_MODEL ?? "ollama-cloud/gpt-oss:120b",

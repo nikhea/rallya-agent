@@ -10,9 +10,9 @@ export const listPublicTicketsTool = createTool({
   id: "rallya-list-public-tickets",
   description:
     "List the ticket types an attendee can currently buy for an event. Use when a user asks about prices, availability, or wants to purchase — each entry shows price, remaining quantity, sale status, and per-order limits. " +
-    "Public view: paused, draft, and sold-out tickets are flagged or hidden via forSale/soldOut. No auth required.",
+    "Public view: paused, draft, and sold-out tickets are flagged or hidden via forSale/soldOut. No auth required, but the event must be given as UUID — slugs are rejected on public routes.",
   inputSchema: z.object({
-    event: z.string().describe(eventRef),
+    event: z.string().describe("Event UUID (NOT a slug — public routes reject slugs)"),
   }),
   outputSchema: pageSchema(ticketSchema),
   execute: async ({ event }) => {
@@ -90,7 +90,8 @@ export const updateTicketTool = createTool({
   id: "rallya-update-ticket",
   description:
     "Patch a ticket type — rename, change price, adjust total quantity or per-order limit, or shift the sale window. Only include fields that should change. " +
-    "Use with care on tickets that already sold units (lowering quantity below sold counts may fail). Returns the updated ticket type.",
+    "Only org, event, and ticketId are required — never ask for other fields for a partial change. " +
+    "Use with care on tickets that already sold units: lowering quantityTotal below quantitySold fails with 409, and growing it needs event capacity headroom. Returns the updated ticket type.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
@@ -114,14 +115,15 @@ export const updateTicketTool = createTool({
 export const removeTicketTool = createTool({
   id: "rallya-remove-ticket",
   description:
-    "Permanently delete a ticket type. Prefer pausing when you just want to hide it from sale — deletion is irreversible and may be blocked if units were sold. " +
-    "Returns a deletion confirmation.",
+    "Permanently delete a ticket type. Prefer pausing when you just want to hide it from sale — deletion is irreversible and blocked unless zero units were sold (sold history survives even after pausing). " +
+    "Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
     ticketId: z.string().describe("Ticket type UUID"),
   }),
   outputSchema: z.object({ deleted: z.boolean(), ticketId: z.string() }),
+  requireApproval: true,
   execute: async ({ org, event, ticketId }) => {
     const client = getRallyaClient();
     await client.tickets.remove(org, event, ticketId);
