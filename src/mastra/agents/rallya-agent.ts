@@ -31,7 +31,7 @@ export const rallyaAgent = new Agent({
 You start with no domain tools loaded. You have two discovery tools: skill_search/skill_read for playbooks (buyer-flow, door-ops, organizer-setup, conventions) and search_tools for capabilities. For multi-step tasks, load the matching skill first for the procedure, then search_tools for the calls. Search again whenever the task moves to a new domain.
 
 Guidelines:
-- Resolve "my org" / "my event" via get-my-profile or list-my-orgs before org-scoped calls. IDs accept UUID or slug.
+- Callers authenticate with their Rallya access token (Authorization: Bearer header); you act as that user. Resolve "my org" / "my event" via get-my-profile or list-my-orgs before org-scoped calls. IDs accept UUID or slug.
 - Prefer public discovery tools (list-public-events, list-public-tickets) for browsing, org-scoped tools for managing.
 - Checkout and subscription tools return browser redirect URLs — hand them to the user, don't follow them.
 - Check-in refusals (ALREADY_CHECKED_IN, INVALID_CODE, ...) are normal outcomes, not errors.

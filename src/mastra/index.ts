@@ -3,6 +3,7 @@ import { PinoLogger } from "@mastra/loggers";
 import { LibSQLStore } from "@mastra/libsql";
 import { DuckDBStore } from "@mastra/duckdb";
 import { MastraCompositeStore } from "@mastra/core/storage";
+import { MastraJwtAuth } from "@mastra/auth";
 import {
   Observability,
   MastraStorageExporter,
@@ -20,7 +21,6 @@ import {
 import { weatherTool } from "./tools/weather-tool";
 import { rallyaMcpServer } from "./mcp/rallya-mcp-server.js";
 import { rallyaAuthMiddleware } from "./utils/request-context.js";
-import { mcpAuthMiddleware } from "./utils/mcp-auth.js";
 import { rallyaAuthRoutes } from "./routes/rallya-auth.js";
 import {
   orgTools,
@@ -43,6 +43,7 @@ import {
 } from "./utils/index";
 
 export const mastra = new Mastra({
+  environment: process.env.NODE_ENV ?? "development",
   workflows: { weatherWorkflow },
   agents: { weatherAgent, rallyaAgent },
   tools: {
@@ -70,10 +71,13 @@ export const mastra = new Mastra({
   },
   mcpServers: { rallyaMcpServer },
   server: {
-    middleware: [
-      { path: "/api/*", handler: rallyaAuthMiddleware },
-      { path: "/api/mcp/*", handler: mcpAuthMiddleware },
-    ],
+    auth: new MastraJwtAuth({
+      secret: process.env.MASTRA_JWT_SECRET,
+    }),
+    // Single-token auth lives in rallyaAuthMiddleware (verified Rallya
+    // identity per request). No server.auth: this instance serves one
+    // trusted team, and a second credential system only caused confusion.
+    middleware: [{ path: "/api/*", handler: rallyaAuthMiddleware }],
     apiRoutes: rallyaAuthRoutes,
   },
   storage: new MastraCompositeStore({
@@ -94,6 +98,17 @@ export const mastra = new Mastra({
     configs: {
       default: {
         serviceName: "mastra",
+        // Auto-attach these RequestContext values as metadata to all spans
+        // in a trace. Flat keys are set by rallyaAuthMiddleware; nested
+        // paths cover Studio request-context JSON without the middleware.
+        // Never add `rallyaAuth` here — it holds tokens.
+        requestContextKeys: [
+          "userId",
+          "userEmail",
+          "authMethod",
+          "rallyaIdentity.userId",
+          "rallyaIdentity.email",
+        ],
         exporters: [
           new MastraStorageExporter(), // Persists observability events to Mastra Storage
           new MastraPlatformExporter(), // Sends observability events to Mastra Platform (if MASTRA_PLATFORM_ACCESS_TOKEN is set)
