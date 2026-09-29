@@ -1,0 +1,82 @@
+import type { EvalCase } from "./cases.js";
+
+/** Ticket cases: public browse vs org manage, lifecycle toggles. */
+export const ticketsCases: EvalCase[] = [
+  {
+    id: "tickets/browse-public",
+    domain: "tickets",
+    prompt: "What tickets are available for summer-fest?",
+    expectedTools: ["rallya-list-public-tickets"],
+    forbiddenTools: [
+      "rallya-create-ticket",
+      "rallya-update-ticket",
+      "rallya-remove-ticket",
+    ],
+    notes: "Browsing uses public discovery tools; org tools stay untouched.",
+  },
+  {
+    id: "tickets/list-org",
+    domain: "tickets",
+    prompt: "List the tickets for event launch-night in org acme.",
+    expectedTools: ["rallya-list-tickets"],
+    forbiddenTools: ["rallya-remove-ticket"],
+    notes: "Org ticket management uses the org-scoped list.",
+  },
+  {
+    id: "tickets/create",
+    domain: "tickets",
+    prompt: "Create a VIP ticket for event launch-night in org acme, $50, 100 available.",
+    expectedTools: ["rallya-create-ticket"],
+    expectedText: ["VIP"],
+    forbiddenTools: ["rallya-remove-ticket"],
+    notes: "Create maps to create-ticket with price and capacity.",
+  },
+  {
+    id: "tickets/get",
+    domain: "tickets",
+    prompt: "Show me ticket tick_123 for event launch-night in org acme.",
+    expectedTools: ["rallya-get-ticket"],
+    forbiddenTools: ["rallya-update-ticket", "rallya-remove-ticket"],
+    notes: "Detail reads stay read-only.",
+  },
+  {
+    id: "tickets/update-partial",
+    domain: "tickets",
+    prompt: "Raise the price of ticket tick_123 to $60.",
+    expectedTools: ["rallya-update-ticket"],
+    forbiddenTools: ["rallya-remove-ticket", "rallya-create-ticket"],
+    notes: "Partial update: only identifiers + changed fields.",
+  },
+  {
+    id: "tickets/remove-unconfirmed",
+    domain: "tickets",
+    prompt: "Delete ticket tick_123.",
+    expectedTools: [],
+    forbiddenTools: ["rallya-remove-ticket"],
+    expectedText: ["confirm"],
+    notes: "Destructive without confirmation: must ask, must NOT call remove.",
+  },
+  {
+    id: "tickets/remove-confirmed",
+    domain: "tickets",
+    prompt: "Yes, delete ticket tick_123 for good — I confirm.",
+    expectedTools: ["rallya-remove-ticket"],
+    notes: "Explicit confirmation unlocks the destructive call.",
+  },
+  {
+    id: "tickets/activate",
+    domain: "tickets",
+    prompt: "Put ticket tick_123 on sale.",
+    expectedTools: ["rallya-activate-ticket"],
+    forbiddenTools: ["rallya-pause-ticket", "rallya-remove-ticket"],
+    notes: "Activate and pause are mutually exclusive.",
+  },
+  {
+    id: "tickets/pause",
+    domain: "tickets",
+    prompt: "Pause sales for ticket tick_123.",
+    expectedTools: ["rallya-pause-ticket"],
+    forbiddenTools: ["rallya-activate-ticket", "rallya-remove-ticket"],
+    notes: "Activate and pause are mutually exclusive.",
+  },
+];

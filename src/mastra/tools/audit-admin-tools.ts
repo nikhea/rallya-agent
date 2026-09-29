@@ -31,8 +31,8 @@ export const listOrgAuditTool = createTool({
     ...auditQuery,
   }),
   outputSchema: pageSchema(auditEventSchema),
-  execute: async ({ org, ...query }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, ...query }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.audit.listOrg(org as string, query);
   },
 });
@@ -43,12 +43,12 @@ export const listPlatformAuditTool = createTool({
     "List audit events platform-wide across all organizations. Superadmin only — regular org API keys and members cannot use this. " +
     "Accepts the same filters as the org audit log plus an org filter. Returns a paginated envelope of audit events.",
   inputSchema: z.object({
-    org: z.string().optional().describe("Narrow to one org (UUID or slug)"),
+    org: z.string().optional().describe("Narrow to one org"),
     ...auditQuery,
   }),
   outputSchema: pageSchema(auditEventSchema),
-  execute: async ({ ...query }) => {
-    const client = getRallyaClient();
+  execute: async ({ ...query }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.audit.listPlatform(query);
   },
 });
@@ -63,8 +63,8 @@ export const listAdminOrgsTool = createTool({
     perPage: z.number().int().min(1).max(100).optional(),
   }),
   outputSchema: pageSchema(adminOrgSummarySchema),
-  execute: async ({ page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.admin.listOrgs({ page, perPage });
   },
 });
@@ -78,8 +78,8 @@ export const getAdminOrgTool = createTool({
     orgId: z.string().describe("Org UUID"),
   }),
   outputSchema: recordSchema,
-  execute: async ({ orgId }) => {
-    const client = getRallyaClient();
+  execute: async ({ orgId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return (await client.admin.getOrg(orgId)) as Record<string, unknown>;
   },
 });
@@ -95,8 +95,8 @@ export const searchAdminUsersTool = createTool({
     perPage: z.number().int().min(1).max(100).optional(),
   }),
   outputSchema: pageSchema(recordSchema),
-  execute: async ({ q, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ q, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return (await client.admin.searchUsers({ q, page, perPage })) as {
       items: Record<string, unknown>[];
       total: number;
@@ -115,8 +115,8 @@ export const getAdminUserTool = createTool({
     userId: z.string().describe("User UUID"),
   }),
   outputSchema: recordSchema,
-  execute: async ({ userId }) => {
-    const client = getRallyaClient();
+  execute: async ({ userId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return (await client.admin.getUser(userId)) as Record<string, unknown>;
   },
 });
@@ -128,8 +128,8 @@ export const healthLiveTool = createTool({
     "Use as a first connectivity diagnostic when other calls fail — if this fails, the server (not your credentials) is the problem. Returns { status, app }.",
   inputSchema: z.object({}),
   outputSchema: healthLiveSchema,
-  execute: async () => {
-    const client = getRallyaClient();
+  execute: async (_args, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.health.live();
   },
 });
@@ -141,8 +141,8 @@ export const healthHelloTool = createTool({
     "Use alongside health-live to distinguish 'server down' from 'API routing broken'. Returns the endpoint payload as-is.",
   inputSchema: z.object({}),
   outputSchema: recordSchema,
-  execute: async () => {
-    const client = getRallyaClient();
+  execute: async (_args, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return (await client.health.hello()) as Record<string, unknown>;
   },
 });

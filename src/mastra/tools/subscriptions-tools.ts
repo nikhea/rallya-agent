@@ -12,8 +12,8 @@ export const listSubscriptionPlansTool = createTool({
     "Use when a user asks about pricing, compares plans, or when an operation failed with 402 UPGRADE_REQUIRED and you need to explain the next tier up. No auth required.",
   inputSchema: z.object({}),
   outputSchema: z.array(subscriptionTierSchema),
-  execute: async () => {
-    const client = getRallyaClient();
+  execute: async (_args, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.subscriptions.listPlans();
   },
 });
@@ -27,8 +27,8 @@ export const getSubscriptionTool = createTool({
     org: z.string().describe(orgRef),
   }),
   outputSchema: subscriptionSchema,
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.subscriptions.get(org);
   },
 });
@@ -38,14 +38,16 @@ export const checkoutSubscriptionTool = createTool({
   description:
     "Start a Stripe subscription-mode Checkout to upgrade an org to PRO or SCALE. OWNER role required. " +
     "Returns a hosted payment URL plus session id — the billing owner completes payment in the browser and fulfillment lands via webhook (poll get-subscription to confirm). " +
-    "Fails with 503 when billing is not configured on the server. Note this changes real billing — confirm the plan with the user first.",
+    "Sessions are single-use and every call mints a fresh one; fails with 409 if the org already holds that plan, 503 when billing is unconfigured server-side. " +
+    "Note this changes real billing — confirm the plan with the user first. Requires human approval before execution.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     plan: z.enum(["PRO", "SCALE"]).describe("Target paid tier"),
   }),
   outputSchema: checkoutResponseSchema,
-  execute: async ({ org, plan }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org, plan }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.subscriptions.checkout(org, plan);
   },
 });
@@ -54,13 +56,14 @@ export const openSubscriptionPortalTool = createTool({
   id: "rallya-open-subscription-portal",
   description:
     "Open the Stripe Customer Portal for self-serve subscription management (update payment method, cancel). OWNER role required. " +
-    "Downgrades and cancellations take effect at the end of the current billing period. Returns the portal { url } to redirect the billing owner to.",
+    "Downgrades and cancellations take effect at the end of the current billing period. Managing billing requires human approval before execution. Returns the portal { url } to redirect the billing owner to.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
   }),
   outputSchema: z.object({ url: z.string() }),
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.subscriptions.portal(org);
   },
 });

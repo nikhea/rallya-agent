@@ -6,7 +6,8 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^26.6.3",
-    "mastra": "^1.31.3"
+    "mastra": "^1.31.3",
+    "vitest": "^3"
   },
   "peerDependencies": {
     "typescript": "^7.0.2"
@@ -17,16 +18,23 @@
   "scripts": {
     "dev": "mastra dev",
     "build": "mastra build",
-    "start": "mastra start"
+    "start": "mastra start",
+    "evals": "bun src/mastra/evals/validate.ts",
+    "evals:run": "bun src/mastra/evals/run.ts",
+    "evals:seed": "bun src/mastra/evals/seed-datasets.ts",
+    "test:evals": "vitest run"
   },
   "dependencies": {
+    "@mastra/auth": "^1.1.3",
     "@mastra/core": "^1.71.0",
     "@mastra/duckdb": "^1.11.1",
     "@mastra/evals": "^1.10.3",
     "@mastra/libsql": "^1.23.3",
     "@mastra/loggers": "^1.3.2",
+    "@mastra/mcp": "^2.1.0",
     "@mastra/memory": "^1.32.1",
     "@mastra/observability": "^1.18.1",
+    "@mastra/pg": "^1.27.1",
     "@mastra/quickjs": "^0.1.3",
     "@rallya/sdk": "^0.2.0",
     "zod": "^4"

@@ -10,13 +10,13 @@ export const listPublicTicketsTool = createTool({
   id: "rallya-list-public-tickets",
   description:
     "List the ticket types an attendee can currently buy for an event. Use when a user asks about prices, availability, or wants to purchase — each entry shows price, remaining quantity, sale status, and per-order limits. " +
-    "Public view: paused, draft, and sold-out tickets are flagged or hidden via forSale/soldOut. No auth required.",
+    "Public view: paused, draft, and sold-out tickets are flagged or hidden via forSale/soldOut. No auth required, but the event must be given as UUID — slugs are rejected on public routes.",
   inputSchema: z.object({
-    event: z.string().describe(eventRef),
+    event: z.string().describe("Event UUID (NOT a slug — public routes reject slugs)"),
   }),
   outputSchema: pageSchema(ticketSchema),
-  execute: async ({ event }) => {
-    const client = getRallyaClient();
+  execute: async ({ event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     // NOTE: the SDK types this as TicketType[], but the wire returns a { items, total } page.
     return (await client.tickets.listPublic(event)) as unknown as {
       items: z.infer<typeof ticketSchema>[];
@@ -35,8 +35,8 @@ export const listTicketsTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: pageSchema(ticketSchema),
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     // NOTE: the SDK types this as TicketType[], but the wire returns a { items, total } page.
     return (await client.tickets.list(org, event)) as unknown as {
       items: z.infer<typeof ticketSchema>[];
@@ -63,8 +63,8 @@ export const createTicketTool = createTool({
     saleEndsAt: z.string().optional().describe("Sale window end, ISO datetime"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.create(org, event, input);
   },
 });
@@ -80,8 +80,8 @@ export const getTicketTool = createTool({
     ticketId: z.string().describe("Ticket type UUID (see ticket lists)"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ticketId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.get(org, event, ticketId);
   },
 });
@@ -90,7 +90,8 @@ export const updateTicketTool = createTool({
   id: "rallya-update-ticket",
   description:
     "Patch a ticket type — rename, change price, adjust total quantity or per-order limit, or shift the sale window. Only include fields that should change. " +
-    "Use with care on tickets that already sold units (lowering quantity below sold counts may fail). Returns the updated ticket type.",
+    "Only org, event, and ticketId are required — never ask for other fields for a partial change. " +
+    "Use with care on tickets that already sold units: lowering quantityTotal below quantitySold fails with 409, and growing it needs event capacity headroom. Returns the updated ticket type.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
@@ -105,8 +106,8 @@ export const updateTicketTool = createTool({
     saleEndsAt: z.string().optional().describe("ISO datetime"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ticketId, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.update(org, event, ticketId, input);
   },
 });
@@ -114,16 +115,17 @@ export const updateTicketTool = createTool({
 export const removeTicketTool = createTool({
   id: "rallya-remove-ticket",
   description:
-    "Permanently delete a ticket type. Prefer pausing when you just want to hide it from sale — deletion is irreversible and may be blocked if units were sold. " +
-    "Returns a deletion confirmation.",
+    "Permanently delete a ticket type. Prefer pausing when you just want to hide it from sale — deletion is irreversible and blocked unless zero units were sold (sold history survives even after pausing). " +
+    "Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
     ticketId: z.string().describe("Ticket type UUID"),
   }),
   outputSchema: z.object({ deleted: z.boolean(), ticketId: z.string() }),
-  execute: async ({ org, event, ticketId }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org, event, ticketId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.tickets.remove(org, event, ticketId);
     return { deleted: true, ticketId };
   },
@@ -140,8 +142,8 @@ export const activateTicketTool = createTool({
     ticketId: z.string().describe("Ticket type UUID"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ticketId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.activate(org, event, ticketId);
   },
 });
@@ -157,8 +159,8 @@ export const pauseTicketTool = createTool({
     ticketId: z.string().describe("Ticket type UUID"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ticketId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.pause(org, event, ticketId);
   },
 });

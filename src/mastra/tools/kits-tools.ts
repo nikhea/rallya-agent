@@ -11,7 +11,8 @@ export const createKitTool = createTool({
   id: "rallya-create-kit",
   description:
     "Define a named kit type for an event — e.g. 'VIP pack', 'T-shirt (M)', or 'Welcome bag' — with a total quantity of at least 1. " +
-    "Kits model merch or welcome packs handed to checked-in attendees. Use this setup step before any handouts can be collected. Returns the created kit type.",
+    "Kits model merch or welcome packs handed to checked-in attendees. Use this setup step before any handouts can be collected. " +
+    "Kit quotas are plan-gated: over-quota creation fails with 402 UPGRADE_REQUIRED. Returns the created kit type.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
@@ -20,8 +21,8 @@ export const createKitTool = createTool({
     quantityTotal: z.number().int().min(1).describe("Total units available"),
   }),
   outputSchema: kitTypeSchema,
-  execute: async ({ org, event, name, description, quantityTotal }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, name, description, quantityTotal }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.kits.create(org, event, { name, description, quantityTotal });
   },
 });
@@ -36,8 +37,8 @@ export const listKitsTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: z.array(kitTypeSchema),
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.kits.list(org, event);
   },
 });
@@ -46,6 +47,7 @@ export const updateKitTool = createTool({
   id: "rallya-update-kit",
   description:
     "Patch a kit type — rename it, change its description, or adjust the total quantity (e.g. topping up stock). Only include fields that should change. " +
+    "Only org, event, and kitId are required — never ask for other fields for a partial change. " +
     "Takes the kit UUID from the kit list. Returns the updated kit type.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
@@ -56,8 +58,8 @@ export const updateKitTool = createTool({
     quantityTotal: z.number().int().min(1).optional(),
   }),
   outputSchema: kitTypeSchema,
-  execute: async ({ org, event, kitId, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, kitId, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.kits.update(org, event, kitId, input);
   },
 });
@@ -65,16 +67,17 @@ export const updateKitTool = createTool({
 export const removeKitTool = createTool({
   id: "rallya-remove-kit",
   description:
-    "Permanently delete a kit type. Only use when the kit is no longer needed and has no outstanding handouts — deletion is irreversible. " +
-    "Returns a deletion confirmation.",
+    "Permanently delete a kit type. Deletion is irreversible — void any outstanding handouts first, and only delete kits that are no longer needed. " +
+    "Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
     kitId: z.string().describe("Kit UUID (see list-kits)"),
   }),
   outputSchema: z.object({ deleted: z.boolean(), kitId: z.string() }),
-  execute: async ({ org, event, kitId }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org, event, kitId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.kits.remove(org, event, kitId);
     return { deleted: true, kitId };
   },
@@ -95,8 +98,8 @@ export const collectKitTool = createTool({
     idempotencyKey: z.string().optional().describe("Client-generated key making retries safe"),
   }),
   outputSchema: kitCollectionSchema,
-  execute: async ({ org, event, kitId, attendeeId, reserve, idempotencyKey }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, kitId, attendeeId, reserve, idempotencyKey }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.kits.collect(org, event, kitId, { attendeeId, reserve, idempotencyKey });
   },
 });
@@ -112,8 +115,8 @@ export const markKitCollectedTool = createTool({
     collectionId: z.string().describe("Collection UUID (see list-kit-collections)"),
   }),
   outputSchema: kitCollectionSchema,
-  execute: async ({ org, event, collectionId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, collectionId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.kits.markCollected(org, event, collectionId);
   },
 });
@@ -129,8 +132,8 @@ export const voidKitCollectionTool = createTool({
     collectionId: z.string().describe("Collection UUID (see list-kit-collections)"),
   }),
   outputSchema: kitCollectionSchema,
-  execute: async ({ org, event, collectionId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, collectionId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.kits.void(org, event, collectionId);
   },
 });
@@ -148,8 +151,8 @@ export const listKitCollectionsTool = createTool({
     attendeeId: z.string().optional().describe("Only handouts for this attendee UUID"),
   }),
   outputSchema: kitCollectionListSchema,
-  execute: async ({ org, event, kitId, status, attendeeId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, kitId, status, attendeeId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.kits.listCollections(org, event, { kitId, status, attendeeId });
   },
 });

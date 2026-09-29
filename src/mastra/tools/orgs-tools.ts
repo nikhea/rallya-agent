@@ -28,15 +28,15 @@ export const createOrgTool = createTool({
   description:
     "Create a new Rallya organization (workspace). Use when a user wants to set up a new team or company on Rallya — the caller becomes the OWNER of the new org. " +
     "Accepts an optional URL-friendly slug (auto-derived from the name when omitted) and an optional logo URL. " +
-    "Returns the created org including its id, slug, the caller's role, and creation timestamp. Requires user authentication.",
+    "Returns the created org including its id, slug, the caller's role, and creation timestamp. Requires authentication.",
   inputSchema: z.object({
     name: z.string().describe("Organization display name, e.g. 'Acme Inc'"),
     slug: z.string().optional().describe("URL-friendly unique slug, e.g. 'acme'. Auto-derived from the name if omitted."),
     logo: z.string().optional().describe("Public logo image URL"),
   }),
   outputSchema: orgSchema,
-  execute: async ({ name, slug, logo }) => {
-    const client = getRallyaClient();
+  execute: async ({ name, slug, logo }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.create({ name, slug, logo });
   },
 });
@@ -48,8 +48,8 @@ export const listMyOrgsTool = createTool({
     "Returns an array of orgs; an empty array means the user belongs to no organization yet.",
   inputSchema: z.object({}),
   outputSchema: z.array(orgSchema),
-  execute: async () => {
-    const client = getRallyaClient();
+  execute: async (_args, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.listMine();
   },
 });
@@ -63,8 +63,8 @@ export const getOrgTool = createTool({
     org: z.string().describe(orgRef),
   }),
   outputSchema: orgSchema,
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.get(org);
   },
 });
@@ -73,6 +73,7 @@ export const updateOrgTool = createTool({
   id: "rallya-update-org",
   description:
     "Update an organization's display name, slug, or logo. Use for renames or rebranding; only include the fields that should change. " +
+    "Only the org identifier is required — never ask for other fields for a partial change. " +
     "Changing the slug changes the identifier used in URLs, so prefer confirming with the user first. Returns the updated org.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
@@ -81,8 +82,8 @@ export const updateOrgTool = createTool({
     logo: z.string().optional().describe("New logo image URL"),
   }),
   outputSchema: orgSchema,
-  execute: async ({ org, name, slug, logo }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, name, slug, logo }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.update(org, { name, slug, logo });
   },
 });
@@ -91,13 +92,14 @@ export const removeOrgTool = createTool({
   id: "rallya-remove-org",
   description:
     "Permanently delete an organization and everything under it. Destructive and irreversible — only use after explicit user confirmation. " +
-    "Requires the OWNER role. Returns a deletion confirmation.",
+    "Requires the OWNER role. Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
   }),
   outputSchema: z.object({ deleted: z.boolean(), org: z.string() }),
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.remove(org);
     return { deleted: true, org };
   },
@@ -113,8 +115,8 @@ export const listOrgMembersTool = createTool({
     ...pageQuery,
   }),
   outputSchema: pageSchema(orgMemberSchema),
-  execute: async ({ org, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.listMembers(org, { page, perPage });
   },
 });
@@ -131,8 +133,8 @@ export const addOrgMemberTool = createTool({
     role: z.string().optional().describe("Role to grant: OWNER, ADMIN, or MEMBER (defaults server-side)"),
   }),
   outputSchema: orgMemberSchema,
-  execute: async ({ org, email, role }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, email, role }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.addMember(org, { email, role });
   },
 });
@@ -141,15 +143,15 @@ export const updateOrgMemberRoleTool = createTool({
   id: "rallya-update-org-member-role",
   description:
     "Change a member's built-in role (OWNER, ADMIN, MEMBER) within an organization. Use for promotions or demotions; for fine-grained custom roles use the role-assign tool instead. " +
-    "You need the member's user UUID — list members first if you only have their email. Returns the updated membership.",
+    "You need the member's user UUID — list members first if you only have their email. The last OWNER can never be demoted (fail-closed). Returns the updated membership.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     userId: z.string().describe("Member's user UUID (see list-org-members)"),
     role: z.string().describe("New built-in role: OWNER, ADMIN, or MEMBER"),
   }),
   outputSchema: orgMemberSchema,
-  execute: async ({ org, userId, role }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, userId, role }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.updateMemberRole(org, userId, role);
   },
 });
@@ -158,14 +160,15 @@ export const removeOrgMemberTool = createTool({
   id: "rallya-remove-org-member",
   description:
     "Remove a member from an organization, revoking their access immediately. Use when someone leaves the team or was added by mistake. " +
-    "Takes the member's user UUID (list members first if needed). Returns a removal confirmation.",
+    "Takes the member's user UUID (list members first if needed). The last OWNER can never be removed. Requires human approval before execution. Returns a removal confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     userId: z.string().describe("Member's user UUID (see list-org-members)"),
   }),
   outputSchema: z.object({ removed: z.boolean(), org: z.string(), userId: z.string() }),
-  execute: async ({ org, userId }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org, userId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.removeMember(org, userId);
     return { removed: true, org, userId };
   },
@@ -183,8 +186,8 @@ export const inviteOrgMemberTool = createTool({
     role: z.string().optional().describe("Role the invite grants, e.g. MEMBER or ADMIN"),
   }),
   outputSchema: messageSchema,
-  execute: async ({ org, email, role }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, email, role }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     // NOTE: the SDK types this as OrgInvite, but the wire returns { message: "Invite sent" }.
     return (await client.orgs.invite(org, { email, role })) as unknown as { message: string };
   },
@@ -200,8 +203,8 @@ export const listOrgInvitesTool = createTool({
     ...pageQuery,
   }),
   outputSchema: pageSchema(orgInviteSchema),
-  execute: async ({ org, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.listInvites(org, { page, perPage });
   },
 });
@@ -216,8 +219,8 @@ export const revokeOrgInviteTool = createTool({
     inviteId: z.string().describe("Invite UUID (see list-org-invites)"),
   }),
   outputSchema: z.object({ revoked: z.boolean(), inviteId: z.string() }),
-  execute: async ({ org, inviteId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, inviteId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.revokeInvite(org, inviteId);
     return { revoked: true, inviteId };
   },
@@ -227,13 +230,13 @@ export const acceptOrgInviteTool = createTool({
   id: "rallya-accept-org-invite",
   description:
     "Accept an organization invite using its token, joining the org. Use when the current user received an invite (e.g. via email) and wants to join. " +
-    "The token is the secret from the invitation, not the invite id. Returns a confirmation message.",
+    "The token is the secret from the invitation, not the invite id, and the invite email must match the current user's account email. Returns a confirmation message.",
   inputSchema: z.object({
     token: z.string().describe("Invite token from the invitation"),
   }),
   outputSchema: messageSchema,
-  execute: async ({ token }) => {
-    const client = getRallyaClient();
+  execute: async ({ token }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.acceptInvite(token);
   },
 });
@@ -247,8 +250,8 @@ export const declineOrgInviteTool = createTool({
     token: z.string().describe("Invite token from the invitation"),
   }),
   outputSchema: messageSchema,
-  execute: async ({ token }) => {
-    const client = getRallyaClient();
+  execute: async ({ token }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.declineInvite(token);
   },
 });
@@ -262,8 +265,8 @@ export const listOrgRolesTool = createTool({
     org: z.string().describe(orgRef),
   }),
   outputSchema: z.array(customRoleSchema),
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.listRoles(org);
   },
 });
@@ -281,8 +284,8 @@ export const defineOrgRoleTool = createTool({
       .describe("Permission grants, e.g. [{ object: 'checkin', action: 'create' }]"),
   }),
   outputSchema: customRoleSchema,
-  execute: async ({ org, name, permissions }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, name, permissions }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.defineRole(org, { name, permissions });
   },
 });
@@ -300,8 +303,8 @@ export const updateOrgRoleTool = createTool({
       .describe("Complete new permission list"),
   }),
   outputSchema: customRoleSchema,
-  execute: async ({ org, role, permissions }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, role, permissions }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.updateRole(org, role, permissions);
   },
 });
@@ -309,15 +312,16 @@ export const updateOrgRoleTool = createTool({
 export const deleteOrgRoleTool = createTool({
   id: "rallya-delete-org-role",
   description:
-    "Delete a custom org role. Only use when no one should hold it anymore — check holder counts via the role list first. " +
-    "Returns a deletion confirmation.",
+    "Delete a custom org role. Only use when no one should hold it anymore — check holder counts via the role list first; deletion fails with 409 while the role is still assigned. " +
+    "Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     role: z.string().describe("Role name or id"),
   }),
   outputSchema: z.object({ deleted: z.boolean(), role: z.string() }),
-  execute: async ({ org, role }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org, role }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.deleteRole(org, role);
     return { deleted: true, role };
   },
@@ -334,8 +338,8 @@ export const assignOrgRoleTool = createTool({
     userId: z.string().describe("User UUID (see list-org-members)"),
   }),
   outputSchema: z.object({ assigned: z.boolean(), role: z.string(), userId: z.string() }),
-  execute: async ({ org, role, userId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, role, userId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.assignRole(org, role, userId);
     return { assigned: true, role, userId };
   },
@@ -352,8 +356,8 @@ export const unassignOrgRoleTool = createTool({
     userId: z.string().describe("User UUID"),
   }),
   outputSchema: z.object({ unassigned: z.boolean(), role: z.string(), userId: z.string() }),
-  execute: async ({ org, role, userId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, role, userId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.unassignRole(org, role, userId);
     return { unassigned: true, role, userId };
   },

@@ -1,0 +1,79 @@
+# Evals CI: free static checks on every push, live gate suite on PRs, full LLM suite nightly.
+#
+# Required secrets (repo settings → secrets and variables → actions):
+#   MASTRA_JWT_SECRET   — operator JWT secret (import guard)
+#   RALLYA_BASE_URL     — staging Rallya API, e.g. https://staging…/api/v1
+#   RALLYA_API_KEY      — staging server-to-server key (rk_test_…), preferred
+#   PROVIDER KEYS       — whatever the agent-under-test models need
+#                         (see RALLYA_AGENT_MODEL / agent model list)
+#   DATABASE_URL        — optional; unset = LibSQL file fallback (fine for CI)
+#
+# PR gates are deterministic checks only (no judge LLM), but each case still
+# runs the agent: expect LLM + Rallya traffic and minutes of runtime.
+
+name: evals
+
+on:
+  push:
+    branches: [main, tools]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *" # nightly full suite
+  workflow_dispatch:
+
+jobs:
+  static:
+    name: static (tsc + case validation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: rallya-agent
+      - run: bunx tsc --noEmit
+        working-directory: rallya-agent
+      - run: bun run evals
+        working-directory: rallya-agent
+
+  gates:
+    name: live gates (zero judge LLM)
+    runs-on: ubuntu-latest
+    needs: static
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: bun install --frozen-lockfile
+        working-directory: rallya-agent
+      - run: bunx vitest run
+        working-directory: rallya-agent
+        env:
+          NODE_ENV: test
+          MASTRA_JWT_SECRET: ${{ secrets.MASTRA_JWT_SECRET }}
+          RALLYA_BASE_URL: ${{ secrets.RALLYA_BASE_URL }}
+          RALLYA_API_KEY: ${{ secrets.RALLYA_API_KEY }}
+
+  full:
+    name: nightly full (LLM judges + thresholds)
+    runs-on: ubuntu-latest
+    needs: static
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: bun install --frozen-lockfile
+        working-directory: rallya-agent
+      - run: bun run evals:run --full --concurrency=2
+        working-directory: rallya-agent
+        env:
+          NODE_ENV: test
+          MASTRA_JWT_SECRET: ${{ secrets.MASTRA_JWT_SECRET }}
+          RALLYA_BASE_URL: ${{ secrets.RALLYA_BASE_URL }}
+          RALLYA_API_KEY: ${{ secrets.RALLYA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

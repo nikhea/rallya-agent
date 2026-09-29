@@ -19,13 +19,13 @@ export const listPublicEventsTool = createTool({
     status: eventStatus.describe("Filter by status (public discovery is typically PUBLISHED)"),
     from: z.string().optional().describe("Only events starting at/after this ISO datetime, e.g. '2026-10-01T00:00:00Z'"),
     to: z.string().optional().describe("Only events starting at/before this ISO datetime"),
-    sort: z.enum(["starts", "created"]).optional().describe("Sort by start time or creation time"),
+    sort: z.enum(["starts", "created"]).optional().describe("Sort order: use exactly 'starts' (by start time) or 'created' (by creation time)"),
     page: z.number().int().min(1).optional().describe("Page number, defaults to 1"),
     perPage: z.number().int().min(1).max(100).optional().describe("Items per page, default 20, max 100"),
   }),
   outputSchema: pageSchema(eventSchema),
-  execute: async ({ q, status, from, to, sort, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ q, status, from, to, sort, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.listPublic({ q, status, from, to, sort, page, perPage });
   },
 });
@@ -33,14 +33,14 @@ export const listPublicEventsTool = createTool({
 export const getPublicEventTool = createTool({
   id: "rallya-get-public-event",
   description:
-    "Fetch the public details of a single published event by UUID or slug. Use to show event info (title, venue, dates, capacity, cover) to someone browsing, or to resolve an event identifier before ordering tickets. " +
-    "Only works for published events; drafts require the org-scoped get-event tool.",
+    "Fetch the public details of a single published event by UUID. Use to show event info (title, venue, dates, capacity, cover) to someone browsing, or to get the event UUID needed for ticket ordering. " +
+    "Only works for published events, and only with the UUID — slugs are rejected on public routes, so resolve the UUID via list-public-events first if you only have a slug. Drafts require the org-scoped get-event tool.",
   inputSchema: z.object({
-    event: z.string().describe(eventRef),
+    event: z.string().describe("Event UUID (NOT a slug — public routes reject slugs)"),
   }),
   outputSchema: eventSchema,
-  execute: async ({ event }) => {
-    const client = getRallyaClient();
+  execute: async ({ event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.getPublic(event);
   },
 });
@@ -53,16 +53,16 @@ export const listOrgEventsTool = createTool({
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     q: z.string().optional().describe("Free-text search within the org's events"),
-    status: eventStatus,
+    status: eventStatus.describe("Filter by status: DRAFT, PUBLISHED, or CANCELLED"),
     from: z.string().optional().describe("Only events starting at/after this ISO datetime"),
     to: z.string().optional().describe("Only events starting at/before this ISO datetime"),
-    sort: z.enum(["starts", "created"]).optional(),
+    sort: z.enum(["starts", "created"]).optional().describe("Sort order: use exactly 'starts' (by start time) or 'created' (by creation time)"),
     page: z.number().int().min(1).optional(),
     perPage: z.number().int().min(1).max(100).optional(),
   }),
   outputSchema: pageSchema(eventSchema),
-  execute: async ({ org, q, status, from, to, sort, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, q, status, from, to, sort, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.listOrg(org, { q, status, from, to, sort, page, perPage });
   },
 });
@@ -84,8 +84,8 @@ export const createEventTool = createTool({
     capacity: z.number().int().min(1).optional().describe("Total attendee capacity"),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.create(org, input);
   },
 });
@@ -100,8 +100,8 @@ export const getEventTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.get(org, event);
   },
 });
@@ -110,6 +110,10 @@ export const updateEventTool = createTool({
   id: "rallya-update-event",
   description:
     "Patch an event's details — title, slug, description, venue, location, dates, capacity. Only include fields that should change; everything else is left untouched. " +
+    "Only org and event are required — every other field is optional, so to change just the description and capacity, pass only those two. " +
+    "There are NO other mandatory fields: never ask the user for title, dates, or venue for a partial change. " +
+    "If you lack the org or event identifier, resolve it first with get-my-profile, list-my-orgs, or list-org-events — do not guess. " +
+    "Lowering capacity below already-allocated tickets fails with 409. " +
     "Set clearCover to remove the cover image. Returns the updated event.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
@@ -125,8 +129,8 @@ export const updateEventTool = createTool({
     clearCover: z.boolean().optional().describe("Set true to remove the cover image"),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.update(org, event, input);
   },
 });
@@ -135,14 +139,15 @@ export const removeEventTool = createTool({
   id: "rallya-remove-event",
   description:
     "Permanently delete an event and its associated data. Destructive — only use after explicit user confirmation. " +
-    "Returns a deletion confirmation.",
+    "Requires human approval before execution. Returns a deletion confirmation.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
   }),
   outputSchema: z.object({ deleted: z.boolean(), event: z.string() }),
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.events.remove(org, event);
     return { deleted: true, event };
   },
@@ -151,15 +156,15 @@ export const removeEventTool = createTool({
 export const publishEventTool = createTool({
   id: "rallya-publish-event",
   description:
-    "Publish a DRAFT event, making it visible in public discovery and available for ticket sales. Use as the final go-live step after the event details and tickets are ready. " +
+    "Publish a DRAFT event, making it visible in public discovery and eligible for ticket sales. Use as the final go-live step after the event details are ready (ticket types still need separate activation before selling). " +
     "Returns the event with status PUBLISHED.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.publish(org, event);
   },
 });
@@ -174,8 +179,8 @@ export const unpublishEventTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.unpublish(org, event);
   },
 });
@@ -183,15 +188,16 @@ export const unpublishEventTool = createTool({
 export const cancelEventTool = createTool({
   id: "rallya-cancel-event",
   description:
-    "Cancel an event (status CANCELLED). Use when the event will not happen — distinct from unpublishing, which merely hides it. " +
-    "Confirm with the user first, as attendees may need refunds or notice. Returns the cancelled event.",
+    "Cancel an event (status CANCELLED, terminal — it cannot be un-cancelled). Use on a PUBLISHED event that will not happen — distinct from unpublishing, which merely hides it. " +
+    "Confirm with the user first, as attendees may need refunds or notice. Already-cancelled events fail with 409. Requires human approval before execution. Returns the cancelled event.",
   inputSchema: z.object({
     org: z.string().describe(orgRef),
     event: z.string().describe(eventRef),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  requireApproval: true,
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.cancel(org, event);
   },
 });
@@ -206,8 +212,8 @@ export const listEventImagesTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: pageSchema(eventImageSchema),
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.listImages(org, event);
   },
 });
