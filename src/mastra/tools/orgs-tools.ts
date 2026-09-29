@@ -35,8 +35,8 @@ export const createOrgTool = createTool({
     logo: z.string().optional().describe("Public logo image URL"),
   }),
   outputSchema: orgSchema,
-  execute: async ({ name, slug, logo }) => {
-    const client = getRallyaClient();
+  execute: async ({ name, slug, logo }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.create({ name, slug, logo });
   },
 });
@@ -48,8 +48,8 @@ export const listMyOrgsTool = createTool({
     "Returns an array of orgs; an empty array means the user belongs to no organization yet.",
   inputSchema: z.object({}),
   outputSchema: z.array(orgSchema),
-  execute: async () => {
-    const client = getRallyaClient();
+  execute: async (_args, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.listMine();
   },
 });
@@ -63,8 +63,8 @@ export const getOrgTool = createTool({
     org: z.string().describe(orgRef),
   }),
   outputSchema: orgSchema,
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.get(org);
   },
 });
@@ -82,8 +82,8 @@ export const updateOrgTool = createTool({
     logo: z.string().optional().describe("New logo image URL"),
   }),
   outputSchema: orgSchema,
-  execute: async ({ org, name, slug, logo }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, name, slug, logo }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.update(org, { name, slug, logo });
   },
 });
@@ -98,8 +98,8 @@ export const removeOrgTool = createTool({
   }),
   outputSchema: z.object({ deleted: z.boolean(), org: z.string() }),
   requireApproval: true,
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.remove(org);
     return { deleted: true, org };
   },
@@ -115,8 +115,8 @@ export const listOrgMembersTool = createTool({
     ...pageQuery,
   }),
   outputSchema: pageSchema(orgMemberSchema),
-  execute: async ({ org, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.listMembers(org, { page, perPage });
   },
 });
@@ -133,8 +133,8 @@ export const addOrgMemberTool = createTool({
     role: z.string().optional().describe("Role to grant: OWNER, ADMIN, or MEMBER (defaults server-side)"),
   }),
   outputSchema: orgMemberSchema,
-  execute: async ({ org, email, role }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, email, role }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.addMember(org, { email, role });
   },
 });
@@ -150,8 +150,8 @@ export const updateOrgMemberRoleTool = createTool({
     role: z.string().describe("New built-in role: OWNER, ADMIN, or MEMBER"),
   }),
   outputSchema: orgMemberSchema,
-  execute: async ({ org, userId, role }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, userId, role }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.updateMemberRole(org, userId, role);
   },
 });
@@ -167,8 +167,8 @@ export const removeOrgMemberTool = createTool({
   }),
   outputSchema: z.object({ removed: z.boolean(), org: z.string(), userId: z.string() }),
   requireApproval: true,
-  execute: async ({ org, userId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, userId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.removeMember(org, userId);
     return { removed: true, org, userId };
   },
@@ -186,8 +186,8 @@ export const inviteOrgMemberTool = createTool({
     role: z.string().optional().describe("Role the invite grants, e.g. MEMBER or ADMIN"),
   }),
   outputSchema: messageSchema,
-  execute: async ({ org, email, role }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, email, role }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     // NOTE: the SDK types this as OrgInvite, but the wire returns { message: "Invite sent" }.
     return (await client.orgs.invite(org, { email, role })) as unknown as { message: string };
   },
@@ -203,8 +203,8 @@ export const listOrgInvitesTool = createTool({
     ...pageQuery,
   }),
   outputSchema: pageSchema(orgInviteSchema),
-  execute: async ({ org, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.listInvites(org, { page, perPage });
   },
 });
@@ -219,8 +219,8 @@ export const revokeOrgInviteTool = createTool({
     inviteId: z.string().describe("Invite UUID (see list-org-invites)"),
   }),
   outputSchema: z.object({ revoked: z.boolean(), inviteId: z.string() }),
-  execute: async ({ org, inviteId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, inviteId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.revokeInvite(org, inviteId);
     return { revoked: true, inviteId };
   },
@@ -235,8 +235,8 @@ export const acceptOrgInviteTool = createTool({
     token: z.string().describe("Invite token from the invitation"),
   }),
   outputSchema: messageSchema,
-  execute: async ({ token }) => {
-    const client = getRallyaClient();
+  execute: async ({ token }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.acceptInvite(token);
   },
 });
@@ -250,8 +250,8 @@ export const declineOrgInviteTool = createTool({
     token: z.string().describe("Invite token from the invitation"),
   }),
   outputSchema: messageSchema,
-  execute: async ({ token }) => {
-    const client = getRallyaClient();
+  execute: async ({ token }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.declineInvite(token);
   },
 });
@@ -265,8 +265,8 @@ export const listOrgRolesTool = createTool({
     org: z.string().describe(orgRef),
   }),
   outputSchema: z.array(customRoleSchema),
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.listRoles(org);
   },
 });
@@ -284,8 +284,8 @@ export const defineOrgRoleTool = createTool({
       .describe("Permission grants, e.g. [{ object: 'checkin', action: 'create' }]"),
   }),
   outputSchema: customRoleSchema,
-  execute: async ({ org, name, permissions }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, name, permissions }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.defineRole(org, { name, permissions });
   },
 });
@@ -303,8 +303,8 @@ export const updateOrgRoleTool = createTool({
       .describe("Complete new permission list"),
   }),
   outputSchema: customRoleSchema,
-  execute: async ({ org, role, permissions }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, role, permissions }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orgs.updateRole(org, role, permissions);
   },
 });
@@ -320,8 +320,8 @@ export const deleteOrgRoleTool = createTool({
   }),
   outputSchema: z.object({ deleted: z.boolean(), role: z.string() }),
   requireApproval: true,
-  execute: async ({ org, role }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, role }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.deleteRole(org, role);
     return { deleted: true, role };
   },
@@ -338,8 +338,8 @@ export const assignOrgRoleTool = createTool({
     userId: z.string().describe("User UUID (see list-org-members)"),
   }),
   outputSchema: z.object({ assigned: z.boolean(), role: z.string(), userId: z.string() }),
-  execute: async ({ org, role, userId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, role, userId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.assignRole(org, role, userId);
     return { assigned: true, role, userId };
   },
@@ -356,8 +356,8 @@ export const unassignOrgRoleTool = createTool({
     userId: z.string().describe("User UUID"),
   }),
   outputSchema: z.object({ unassigned: z.boolean(), role: z.string(), userId: z.string() }),
-  execute: async ({ org, role, userId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, role, userId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.orgs.unassignRole(org, role, userId);
     return { unassigned: true, role, userId };
   },

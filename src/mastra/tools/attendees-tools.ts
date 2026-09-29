@@ -16,8 +16,8 @@ export const listMyAttendeesTool = createTool({
     perPage: z.number().int().min(1).max(100).optional().describe("Items per page, default 20, max 100"),
   }),
   outputSchema: pageSchema(attendeeSchema),
-  execute: async ({ page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.attendees.listMine({ page, perPage });
   },
 });
@@ -31,8 +31,8 @@ export const getMyAttendeeTool = createTool({
     attendeeId: z.string().describe("Attendee UUID (see list-my-attendees)"),
   }),
   outputSchema: attendeeSchema,
-  execute: async ({ attendeeId }) => {
-    const client = getRallyaClient();
+  execute: async ({ attendeeId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.attendees.getMine(attendeeId);
   },
 });
@@ -46,8 +46,8 @@ export const cancelMyAttendeeTool = createTool({
     attendeeId: z.string().describe("Attendee UUID (see list-my-attendees)"),
   }),
   outputSchema: attendeeSchema,
-  execute: async ({ attendeeId }) => {
-    const client = getRallyaClient();
+  execute: async ({ attendeeId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.attendees.cancelMine(attendeeId);
   },
 });
@@ -64,8 +64,8 @@ export const listEventRosterTool = createTool({
     perPage: z.number().int().min(1).max(100).optional(),
   }),
   outputSchema: pageSchema(attendeeSchema),
-  execute: async ({ org, event, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.attendees.listRoster(org, event, { page, perPage });
   },
 });
@@ -82,8 +82,8 @@ export const addWalkInAttendeeTool = createTool({
     name: z.string().optional().describe("Walk-in's full name"),
   }),
   outputSchema: attendeeSchema,
-  execute: async ({ org, event, email, name }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, email, name }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.attendees.addWalkIn(org, event, { email, name });
   },
 });
@@ -101,8 +101,8 @@ export const correctAttendeeTool = createTool({
     email: z.string().email().optional().describe("Corrected email address"),
   }),
   outputSchema: attendeeSchema,
-  execute: async ({ org, event, attendeeId, name, email }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, attendeeId, name, email }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.attendees.correct(org, event, attendeeId, { name, email });
   },
 });

@@ -15,8 +15,8 @@ export const listPublicTicketsTool = createTool({
     event: z.string().describe("Event UUID (NOT a slug — public routes reject slugs)"),
   }),
   outputSchema: pageSchema(ticketSchema),
-  execute: async ({ event }) => {
-    const client = getRallyaClient();
+  execute: async ({ event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     // NOTE: the SDK types this as TicketType[], but the wire returns a { items, total } page.
     return (await client.tickets.listPublic(event)) as unknown as {
       items: z.infer<typeof ticketSchema>[];
@@ -35,8 +35,8 @@ export const listTicketsTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: pageSchema(ticketSchema),
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     // NOTE: the SDK types this as TicketType[], but the wire returns a { items, total } page.
     return (await client.tickets.list(org, event)) as unknown as {
       items: z.infer<typeof ticketSchema>[];
@@ -63,8 +63,8 @@ export const createTicketTool = createTool({
     saleEndsAt: z.string().optional().describe("Sale window end, ISO datetime"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.create(org, event, input);
   },
 });
@@ -80,8 +80,8 @@ export const getTicketTool = createTool({
     ticketId: z.string().describe("Ticket type UUID (see ticket lists)"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ticketId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.get(org, event, ticketId);
   },
 });
@@ -106,8 +106,8 @@ export const updateTicketTool = createTool({
     saleEndsAt: z.string().optional().describe("ISO datetime"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ticketId, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.update(org, event, ticketId, input);
   },
 });
@@ -124,8 +124,8 @@ export const removeTicketTool = createTool({
   }),
   outputSchema: z.object({ deleted: z.boolean(), ticketId: z.string() }),
   requireApproval: true,
-  execute: async ({ org, event, ticketId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.tickets.remove(org, event, ticketId);
     return { deleted: true, ticketId };
   },
@@ -142,8 +142,8 @@ export const activateTicketTool = createTool({
     ticketId: z.string().describe("Ticket type UUID"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ticketId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.activate(org, event, ticketId);
   },
 });
@@ -159,8 +159,8 @@ export const pauseTicketTool = createTool({
     ticketId: z.string().describe("Ticket type UUID"),
   }),
   outputSchema: ticketSchema,
-  execute: async ({ org, event, ticketId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ticketId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.tickets.pause(org, event, ticketId);
   },
 });

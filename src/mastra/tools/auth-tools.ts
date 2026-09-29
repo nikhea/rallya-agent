@@ -11,8 +11,8 @@ export const getMyProfileTool = createTool({
     "(Login/registration are intentionally NOT tools — credentials belong in environment config, never in model context.)",
   inputSchema: z.object({}),
   outputSchema: meSchema,
-  execute: async () => {
-    const client = getRallyaClient();
+  execute: async (_args, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.auth.me();
   },
 });
@@ -24,8 +24,8 @@ export const logoutTool = createTool({
     "Note this ends the session the agent itself runs on, so further authenticated calls will fail until new credentials are configured. Returns a confirmation message.",
   inputSchema: z.object({}),
   outputSchema: messageSchema,
-  execute: async () => {
-    const client = getRallyaClient();
+  execute: async (_args, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.auth.logout();
   },
 });

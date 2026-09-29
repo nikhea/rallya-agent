@@ -24,8 +24,8 @@ export const listPublicEventsTool = createTool({
     perPage: z.number().int().min(1).max(100).optional().describe("Items per page, default 20, max 100"),
   }),
   outputSchema: pageSchema(eventSchema),
-  execute: async ({ q, status, from, to, sort, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ q, status, from, to, sort, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.listPublic({ q, status, from, to, sort, page, perPage });
   },
 });
@@ -39,8 +39,8 @@ export const getPublicEventTool = createTool({
     event: z.string().describe("Event UUID (NOT a slug — public routes reject slugs)"),
   }),
   outputSchema: eventSchema,
-  execute: async ({ event }) => {
-    const client = getRallyaClient();
+  execute: async ({ event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.getPublic(event);
   },
 });
@@ -61,8 +61,8 @@ export const listOrgEventsTool = createTool({
     perPage: z.number().int().min(1).max(100).optional(),
   }),
   outputSchema: pageSchema(eventSchema),
-  execute: async ({ org, q, status, from, to, sort, page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, q, status, from, to, sort, page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.listOrg(org, { q, status, from, to, sort, page, perPage });
   },
 });
@@ -84,8 +84,8 @@ export const createEventTool = createTool({
     capacity: z.number().int().min(1).optional().describe("Total attendee capacity"),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.create(org, input);
   },
 });
@@ -100,8 +100,8 @@ export const getEventTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.get(org, event);
   },
 });
@@ -129,8 +129,8 @@ export const updateEventTool = createTool({
     clearCover: z.boolean().optional().describe("Set true to remove the cover image"),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event, ...input }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, ...input }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.update(org, event, input);
   },
 });
@@ -146,8 +146,8 @@ export const removeEventTool = createTool({
   }),
   outputSchema: z.object({ deleted: z.boolean(), event: z.string() }),
   requireApproval: true,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     await client.events.remove(org, event);
     return { deleted: true, event };
   },
@@ -163,8 +163,8 @@ export const publishEventTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.publish(org, event);
   },
 });
@@ -179,8 +179,8 @@ export const unpublishEventTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: eventSchema,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.unpublish(org, event);
   },
 });
@@ -196,8 +196,8 @@ export const cancelEventTool = createTool({
   }),
   outputSchema: eventSchema,
   requireApproval: true,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.cancel(org, event);
   },
 });
@@ -212,8 +212,8 @@ export const listEventImagesTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: pageSchema(eventImageSchema),
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.events.listImages(org, event);
   },
 });

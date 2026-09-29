@@ -17,8 +17,8 @@ export const createOrderTool = createTool({
     idempotencyKey: z.string().optional().describe("Client-generated key making retries safe; auto-generated if omitted"),
   }),
   outputSchema: orderSchema,
-  execute: async ({ event, ticketTypeId, quantity, idempotencyKey }) => {
-    const client = getRallyaClient();
+  execute: async ({ event, ticketTypeId, quantity, idempotencyKey }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orders.create(event, { ticketTypeId, quantity, idempotencyKey });
   },
 });
@@ -33,8 +33,8 @@ export const listMyOrdersTool = createTool({
     perPage: z.number().int().min(1).max(100).optional().describe("Items per page, default 20, max 100"),
   }),
   outputSchema: pageSchema(orderSchema),
-  execute: async ({ page, perPage }) => {
-    const client = getRallyaClient();
+  execute: async ({ page, perPage }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orders.listMine({ page, perPage });
   },
 });
@@ -48,8 +48,8 @@ export const getOrderTool = createTool({
     orderId: z.string().describe("Order UUID"),
   }),
   outputSchema: orderSchema,
-  execute: async ({ orderId }) => {
-    const client = getRallyaClient();
+  execute: async ({ orderId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orders.get(orderId);
   },
 });
@@ -63,8 +63,8 @@ export const cancelOrderTool = createTool({
     orderId: z.string().describe("Order UUID"),
   }),
   outputSchema: orderSchema,
-  execute: async ({ orderId }) => {
-    const client = getRallyaClient();
+  execute: async ({ orderId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.orders.cancel(orderId);
   },
 });

@@ -16,8 +16,8 @@ export const checkoutOrderTool = createTool({
   }),
   outputSchema: checkoutResponseSchema,
   requireApproval: true,
-  execute: async ({ orderId }) => {
-    const client = getRallyaClient();
+  execute: async ({ orderId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.payments.checkout(orderId);
   },
 });

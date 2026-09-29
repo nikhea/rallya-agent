@@ -12,8 +12,8 @@ export const listSubscriptionPlansTool = createTool({
     "Use when a user asks about pricing, compares plans, or when an operation failed with 402 UPGRADE_REQUIRED and you need to explain the next tier up. No auth required.",
   inputSchema: z.object({}),
   outputSchema: z.array(subscriptionTierSchema),
-  execute: async () => {
-    const client = getRallyaClient();
+  execute: async (_args, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.subscriptions.listPlans();
   },
 });
@@ -27,8 +27,8 @@ export const getSubscriptionTool = createTool({
     org: z.string().describe(orgRef),
   }),
   outputSchema: subscriptionSchema,
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.subscriptions.get(org);
   },
 });
@@ -46,8 +46,8 @@ export const checkoutSubscriptionTool = createTool({
   }),
   outputSchema: checkoutResponseSchema,
   requireApproval: true,
-  execute: async ({ org, plan }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, plan }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.subscriptions.checkout(org, plan);
   },
 });
@@ -62,8 +62,8 @@ export const openSubscriptionPortalTool = createTool({
   }),
   outputSchema: z.object({ url: z.string() }),
   requireApproval: true,
-  execute: async ({ org }) => {
-    const client = getRallyaClient();
+  execute: async ({ org }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.subscriptions.portal(org);
   },
 });

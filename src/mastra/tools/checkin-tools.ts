@@ -20,11 +20,11 @@ export const scanCheckinTool = createTool({
     attendeeId: z.string().optional().describe("Attendee UUID for manual check-in when no QR is available"),
   }),
   outputSchema: scanResultSchema,
-  execute: async ({ org, event, code, attendeeId }) => {
+  execute: async ({ org, event, code, attendeeId }, context) => {
     if (!code && !attendeeId) {
       throw new Error("Provide exactly one of code or attendeeId");
     }
-    const client = getRallyaClient();
+    const client = getRallyaClient(context?.requestContext);
     return await client.checkin.scan(org, event, { code, attendeeId });
   },
 });
@@ -42,8 +42,8 @@ export const scanBatchCheckinTool = createTool({
     codes: z.array(z.string()).min(1).max(50).describe("QR payloads to scan, 1–50 codes"),
   }),
   outputSchema: z.object({ results: z.array(scanResultSchema) }),
-  execute: async ({ org, event, codes }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, codes }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.checkin.scanBatch(org, event, codes);
   },
 });
@@ -59,8 +59,8 @@ export const revertCheckinTool = createTool({
     attendeeId: z.string().describe("Attendee UUID whose check-in should be undone"),
   }),
   outputSchema: scanResultSchema,
-  execute: async ({ org, event, attendeeId }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event, attendeeId }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.checkin.revert(org, event, attendeeId);
   },
 });
@@ -75,8 +75,8 @@ export const getCheckinStatsTool = createTool({
     event: z.string().describe(eventRef),
   }),
   outputSchema: checkinStatsSchema,
-  execute: async ({ org, event }) => {
-    const client = getRallyaClient();
+  execute: async ({ org, event }, context) => {
+    const client = getRallyaClient(context?.requestContext);
     return await client.checkin.stats(org, event);
   },
 });
