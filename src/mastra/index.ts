@@ -18,6 +18,10 @@ import {
   translationScorer,
 } from "./scorers/weather-scorer";
 import { weatherTool } from "./tools/weather-tool";
+import { rallyaMcpServer } from "./mcp/rallya-mcp-server.js";
+import { rallyaAuthMiddleware } from "./utils/request-context.js";
+import { mcpAuthMiddleware } from "./utils/mcp-auth.js";
+import { rallyaAuthRoutes } from "./routes/rallya-auth.js";
 import {
   orgTools,
   eventTools,
@@ -63,6 +67,14 @@ export const mastra = new Mastra({
     toolCallAppropriatenessScorer,
     completenessScorer,
     translationScorer,
+  },
+  mcpServers: { rallyaMcpServer },
+  server: {
+    middleware: [
+      { path: "/api/*", handler: rallyaAuthMiddleware },
+      { path: "/api/mcp/*", handler: mcpAuthMiddleware },
+    ],
+    apiRoutes: rallyaAuthRoutes,
   },
   storage: new MastraCompositeStore({
     id: "composite-storage",
