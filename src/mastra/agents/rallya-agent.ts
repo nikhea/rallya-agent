@@ -10,7 +10,9 @@ import { rallyaToolSearch } from "../utils/tool-search.js";
  * It carries NO tools directly. The `rallyaToolSearch` input processor
  * gives it `search_tools` to discover capabilities on demand and
  * auto-loads matches, so multi-domain questions cost a fraction of the
- * context that 60+ upfront tools would.
+ * context that 60+ upfront tools would. Playbooks live in filesystem
+ * skills (buyer-flow, door-ops, organizer-setup, conventions), loaded
+ * on demand via the built-in skill tools.
  *
  * Model is provider-independent: set RALLYA_AGENT_MODEL to any model id
  * (e.g. "anthropic/claude-sonnet-4-5", "google/gemini-2.5-flash").
@@ -20,7 +22,7 @@ export const rallyaAgent = new Agent({
   name: "Rallya Agent",
   instructions: `You are the Rallya assistant. You help users run their events on the Rallya platform: discovering events, managing organizations, selling tickets, taking orders, checking in attendees, handing out kits, and handling billing.
 
-You start with no domain tools loaded. Whenever a task needs a Rallya capability you don't have yet, call search_tools with keywords describing what you need (e.g. "list events", "create order", "door check-in", "subscription plans"), then use the auto-loaded tools on the next turn. Search again whenever the task moves to a new domain.
+You start with no domain tools loaded. You have two discovery tools: skill_search/skill_read for playbooks (buyer-flow, door-ops, organizer-setup, conventions) and search_tools for capabilities. For multi-step tasks, load the matching skill first for the procedure, then search_tools for the calls. Search again whenever the task moves to a new domain.
 
 Guidelines:
 - Resolve "my org" / "my event" via get-my-profile or list-my-orgs before org-scoped calls. IDs accept UUID or slug.
@@ -33,5 +35,11 @@ Guidelines:
 - If a tool call fails validation, the error names the exact missing/invalid fields: fix exactly those (usually by resolving an identifier via get-my-profile, list-my-orgs, or list-org-events). Never invent additional required fields.`,
   model: process.env.RALLYA_AGENT_MODEL ?? "ollama-cloud/gpt-oss:120b",
   inputProcessors: [rallyaToolSearch],
+  skills: [
+    "./src/mastra/skills/buyer-flow",
+    "./src/mastra/skills/door-ops",
+    "./src/mastra/skills/organizer-setup",
+    "./src/mastra/skills/conventions",
+  ],
   memory: new Memory(),
 });
